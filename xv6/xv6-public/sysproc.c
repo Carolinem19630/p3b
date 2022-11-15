@@ -90,10 +90,13 @@ sys_uptime(void)
   return xticks;
 }
 
-int clone(void){
+int sys_clone(void){
   void(*fcn)(void *, void *); 
   void *arg1;
   void *arg2;
   void *stack;
-  
+
+  if(argptr(1, &fcn, sizeof(*fcn)) < 0 || argptr(1, &arg1, sizeof(*arg1)) < 0 || argptr(1, &arg2, sizeof(*arg2)) < 0 || argptr(1, &stack, sizeof(*stack)) < 0)
+    return -1;
+  return clone(fcn, arg1, arg2, stack);
 }

@@ -225,30 +225,45 @@ fork(void)
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
 int
-fork(void)
+clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 {
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
+  uint sp;
 
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
   }
 
-  // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-    kfree(np->kstack);
-    np->kstack = 0;
-    np->state = UNUSED;
+  // check stack is page aligned
+  if((uint) stack % PGSIZE != 0){
     return -1;
   }
+
+  // new
+  np->pgdir = curproc->pgdir;
+
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
+
+  // new
+  sp = (uint) stack + PGSIZE;
+  sp -= sizeof(void *);
+  memmove((void*)sp, &arg2, sizeof(void *));
+  sp -= sizeof(void *);
+  memmove((void*)sp, &arg1, sizeof(void *));
+  sp -= 4;
+  unsigned int ret = 0xffffffff;
+  memmove((void*)sp, &ret, 4);
+  
+  np->tf->esp = sp;
+  np->tf->eip = (uint)fcn;
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
