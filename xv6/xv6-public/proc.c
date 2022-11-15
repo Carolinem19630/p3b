@@ -265,6 +265,8 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
   np->tf->esp = sp;
   np->tf->eip = (uint)fcn;
 
+  curproc->numThreads++;
+
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
@@ -321,11 +323,56 @@ exit(void)
         wakeup1(initproc);
     }
   }
-
+  curproc->parent->numThreads--;
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
   panic("zombie exit");
+}
+
+// Wait for a child process to exit and return its pid.
+// Return -1 if this process has no children.
+int
+join(void **stack)
+{
+  struct proc *p;
+  int havekids, pid;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc || p->pgdir != curproc->pgdir)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        pid = p->pid;
+        //kfree(p->kstack);
+        //p->kstack = 0;
+        //freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        kfree((char*)*stack); // not sure if it should be dereferenced or not
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
 }
 
 // Wait for a child process to exit and return its pid.
@@ -342,15 +389,17 @@ wait(void)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
+      if(p->parent != curproc || p->pgdir == curproc->pgdir)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
         pid = p->pid;
-        kfree(p->kstack);
-        p->kstack = 0;
-        freevm(p->pgdir);
+        if (p->numThreads==0){
+          kfree(p->kstack);
+          p->kstack = 0;
+          freevm(p->pgdir);
+        }
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;

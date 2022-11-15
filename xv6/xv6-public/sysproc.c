@@ -100,3 +100,11 @@ int sys_clone(void){
     return -1;
   return clone(fcn, arg1, arg2, stack);
 }
+
+int sys_join(void){
+  void **stack;
+
+  if(argptr(1, (char**) &stack, sizeof(*stack)) < 0)
+    return -1;
+  return join(stack);
+}
