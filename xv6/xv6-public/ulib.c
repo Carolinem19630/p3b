@@ -3,6 +3,7 @@
 #include "fcntl.h"
 #include "user.h"
 #include "x86.h"
+#define PGSIZE 4096
 
 char*
 strcpy(char *s, const char *t)
@@ -104,3 +105,35 @@ memmove(void *vdst, const void *vsrc, int n)
     *dst++ = *src++;
   return vdst;
 }
+
+// call malloc() to create a new user stack
+// use clone() to create the child thread -> get it running
+// returns the newly created PID to the parent && 0 to child if successful
+// returns -1 if unsucessful
+int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2) {
+
+void *stack;
+if ((stack = malloc(2*PGSIZE)) == 0){
+  return -1;
+}
+
+// stake - page aligned
+int diff = ((int)(stack))%PGSIZE;
+stack = (stack) + PGSIZE - diff;
+
+int childPid = clone(start_routine, arg1, arg2, stack);
+
+return childPid;
+}
+
+// call join() and frees the user stack
+// returns waited-for PID if successful, -1 otherwise
+int thread_join() {
+
+  void *stack;
+  int childpid = join(&stack);
+  free(stack);
+  return childpid;
+}
+
+
