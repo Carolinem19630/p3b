@@ -81,7 +81,6 @@ allocproc(void)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
       goto found;
-
   release(&ptable.lock);
   return 0;
 
@@ -90,7 +89,6 @@ found:
   p->pid = nextpid++;
 
   release(&ptable.lock);
-
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
     p->state = UNUSED;
@@ -111,7 +109,6 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-
   return p;
 }
 
@@ -217,7 +214,6 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&ptable.lock);
-
   return pid;
 }
 
@@ -230,15 +226,16 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
   int i, pid;
   struct proc *np;
   struct proc *curproc = myproc();
-  uint sp;
+  void * sp;
+  char * localStack = (char*)stack;
 
+  np = allocproc();
   // Allocate process.
-  if((np = allocproc()) == 0){
+  if(np == 0){
     return -1;
   }
-
   // check stack is page aligned
-  if((uint) stack % PGSIZE != 0){
+  if((uint) localStack % PGSIZE != 0){
     return -1;
   }
 
@@ -251,19 +248,22 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
-
+  
+  np->tf->ebp = (int)stack + PGSIZE - 12; 
+  np->tf->esp = (int)stack + PGSIZE - 12;
+  np->tf->eip = (uint)fcn;
   // new
-  sp = (uint) stack + PGSIZE;
-  sp -= sizeof(void *);
-  memmove((void*)sp, &arg2, sizeof(void *));
-  sp -= sizeof(void *);
-  memmove((void*)sp, &arg1, sizeof(void *));
+  np->stack = localStack;
+  sp = stack + PGSIZE;
+  sp -= 4;
+  memmove(sp, &arg2, 4);
+  sp -= 4;
+  memmove(sp, &arg1, 4);
   sp -= 4;
   unsigned int ret = 0xffffffff;
-  memmove((void*)sp, &ret, 4);
+  memmove(sp, &ret, 4);
   
-  np->tf->esp = sp;
-  np->tf->eip = (uint)fcn;
+  
 
   curproc->numThreads++;
 
@@ -276,11 +276,11 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 
   pid = np->pid;
 
-  acquire(&ptable.lock);
+  acquire(&ptable.lock); // remove
 
   np->state = RUNNABLE;
 
-  release(&ptable.lock);
+  release(&ptable.lock); // remove
 
   return pid;
 }
@@ -358,7 +358,7 @@ join(void **stack)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        kfree((char*)*stack); // not sure if it should be dereferenced or not
+        *stack = p->stack;
         release(&ptable.lock);
         return pid;
       }

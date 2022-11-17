@@ -96,8 +96,10 @@ int sys_clone(void){
   void *arg2;
   void *stack;
 
-  if(argptr(1, (char**) &fcn, sizeof(*fcn)) < 0 || argptr(1, (char**) &arg1, sizeof(*arg1)) < 0 || argptr(1, (char**) &arg2, sizeof(*arg2)) < 0 || argptr(1, (char**) &stack, sizeof(*stack)) < 0)
+  if(argptr(0, (char**) &fcn, sizeof(*fcn)) < 0 || argptr(1, (char**) &arg1, sizeof(*arg1)) < 0 || argptr(2, (char**) &arg2, sizeof(*arg2)) < 0 || argptr(3, (char**) &stack, sizeof(*stack)) < 0){
+    cprintf("line 3");
     return -1;
+  }
   return clone(fcn, arg1, arg2, stack);
 }
 

@@ -112,18 +112,18 @@ memmove(void *vdst, const void *vsrc, int n)
 // returns -1 if unsucessful
 int thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2) {
 
-void *stack;
-if ((stack = malloc(2*PGSIZE)) == 0){
-  return -1;
-}
+  void *stack;
+  if ((stack= malloc(2*PGSIZE)) == 0){
+    return -1;
+  }
 
-// stake - page aligned
-int diff = ((int)(stack))%PGSIZE;
-stack = (stack) + PGSIZE - diff;
+  // stack - page aligned
+  if((uint)stack % PGSIZE)
+    stack = stack + (PGSIZE - (uint)stack % PGSIZE);
 
-int childPid = clone(start_routine, arg1, arg2, stack);
+  int childPid = clone(start_routine, arg1, arg2, stack);
 
-return childPid;
+  return childPid;
 }
 
 // call join() and frees the user stack
@@ -136,4 +136,26 @@ int thread_join() {
   return childpid;
 }
 
+static inline int FetchAndAdd(int* variable, int value)
+{
+    __asm__ volatile("lock; xaddl %0, %1"
+      : "+r" (value), "+m" (*variable) // input + output
+      : // No input-only
+      : "memory"
+    );
+    return value;
+}
+ 
+void lock_init(lock_t *lock) {
+  lock->ticket = 0;
+  lock->turn = 0;
+}
 
+void lock_acquire(lock_t *lock) {
+  int myturn = FetchAndAdd(&lock->ticket, lock->ticket);
+  while (lock->turn != myturn)  ; // spin
+}
+
+void lock_release(lock_t *lock) {
+  lock->turn = lock->turn + 1;
+}
