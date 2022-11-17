@@ -169,11 +169,10 @@ growproc(int n)
   struct proc *p;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc || p->pgdir != curproc->pgdir)
+      if(p->parent != curproc || p->pgdir != curproc->pgdir){
         continue;
-      else 
-        p->sz = sz;
-      
+      }
+      p->sz = sz;
   }
   release(&ptable.lock);
   curproc->sz = sz;

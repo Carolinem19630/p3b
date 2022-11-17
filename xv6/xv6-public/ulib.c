@@ -147,15 +147,14 @@ static inline int FetchAndAdd(int* variable, int value)
 }
  
 void lock_init(lock_t *lock) {
-  lock->ticket = 0;
-  lock->turn = 0;
+  lock->flag= 0;
 }
 
 void lock_acquire(lock_t *lock) {
-  int myturn = FetchAndAdd(&lock->ticket, lock->ticket);
-  while (lock->turn != myturn)  ; // spin
+  while(xchg((uint*)&lock->flag, (uint)1) != 0)
+    ;
 }
 
 void lock_release(lock_t *lock) {
-  lock->turn = lock->turn + 1;
+  lock->flag = 0;
 }

@@ -7418,13 +7418,13 @@ myproc(void) {
 80103ae8:	81 c2 84 00 00 00    	add    $0x84,%edx
 80103aee:	81 fa 54 3e 11 80    	cmp    $0x80113e54,%edx
 80103af4:	74 1d                	je     80103b13 <growproc+0x73>
-      if(p->parent != curproc || p->pgdir != curproc->pgdir)
+      if(p->parent != curproc || p->pgdir != curproc->pgdir){
 80103af6:	39 5a 14             	cmp    %ebx,0x14(%edx)
 80103af9:	75 ed                	jne    80103ae8 <growproc+0x48>
 80103afb:	8b 43 04             	mov    0x4(%ebx),%eax
 80103afe:	39 42 04             	cmp    %eax,0x4(%edx)
 80103b01:	75 e5                	jne    80103ae8 <growproc+0x48>
-        p->sz = sz;
+      p->sz = sz;
 80103b03:	89 32                	mov    %esi,(%edx)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 80103b05:	81 c2 84 00 00 00    	add    $0x84,%edx
