@@ -1,4 +1,4 @@
-/* clone with bad stack argument */
+/* check that address space size is updated in threads */
 #include "types.h"
 #include "user.h"
 
@@ -8,6 +8,11 @@
 #define PGSIZE (4096)
 
 int ppid;
+int global = 0;
+unsigned int size = 0;
+lock_t lock, lock2;
+int num_threads = 1;
+
 
 #define assert(x) if (x) {} else { \
    printf(1, "%s: %d ", __FILE__, __LINE__); \
@@ -19,34 +24,87 @@ int ppid;
 
 void worker(void *arg1, void *arg2);
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
    ppid = getpid();
-   void *stack, *p = malloc(PGSIZE * 2);
-   assert(p != NULL);
-   if((uint)p % PGSIZE == 0)
-     stack = p + 4;
-   else
-     stack = p;
 
-   assert(clone(worker, 0, 0, stack) == -1);
+   int arg1 = 11, arg2 = 22;
 
-   stack = sbrk(0);
-   if((uint)stack % PGSIZE)
-     stack = stack + (PGSIZE - (uint)stack % PGSIZE);
-   sbrk( ((uint)stack - (uint)sbrk(0)) + PGSIZE/2 );
-   assert((uint)stack % PGSIZE == 0);
-   assert((uint)sbrk(0) - (uint)stack == PGSIZE/2);
+   lock_init(&lock);
+   lock_init(&lock2);
+   lock_acquire(&lock);
+   lock_acquire(&lock2);
 
-   assert(clone(worker, 0, 0, stack) == -1);
-   
+   for (int i = 0; i < num_threads; i++) {
+      int thread_pid = thread_create(worker, &arg1, &arg2);
+      assert(thread_pid > 0);
+   }
+
+   size = (unsigned int)sbrk(0);
+
+   while (global < num_threads) {
+      lock_release(&lock);
+      sleep(100);
+      lock_acquire(&lock);
+   }
+
+   global = 0;
+   sbrk(10000);
+   size = (unsigned int)sbrk(0);
+   lock_release(&lock);
+
+   while (global < num_threads) {
+      lock_release(&lock2);
+      sleep(100);
+      lock_acquire(&lock2);
+   }
+   lock_release(&lock2);
+
+   for (int i = 0; i < num_threads; i++) {
+      int join_pid = thread_join();
+      assert(join_pid > 0);
+   }
+
    printf(1, "TEST PASSED\n");
-   free(p);
    exit();
 }
 
-void
-worker(void *arg1, void *arg2) {
+void worker2(void *arg1, void *arg2)
+{
+   int arg1_int = *(int*)arg1;
+   int arg2_int = *(int*)arg2;
+   assert(arg1_int == 11);
+   assert(arg2_int == 22);
+   
+   lock_acquire(&lock2);
+   assert((unsigned int)sbrk(0) == size);
+   global++;
+   lock_release(&lock2);
+
+   
    exit();
 }
+
+
+void worker(void *arg1, void *arg2) {
+   lock_acquire(&lock);
+   assert((unsigned int)sbrk(0) == size);
+   global++;
+   lock_release(&lock);
+
+   
+
+
+   lock_acquire(&lock2);
+   //printf(1, "sbrk 0%d\n", sbrk(0));
+   assert((unsigned int)sbrk(0) == size);
+   global++;
+   sbrk(10000);
+   size = (unsigned int)sbrk(0);
+   lock_release(&lock2);
+
+
+
+   exit();
+}
+

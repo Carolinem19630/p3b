@@ -166,6 +166,16 @@ growproc(int n)
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
+  struct proc *p;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc || p->pgdir != curproc->pgdir)
+        continue;
+      else 
+        p->sz = sz;
+      
+  }
+  release(&ptable.lock);
   curproc->sz = sz;
   switchuvm(curproc);
   return 0;
@@ -248,7 +258,7 @@ clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
-  
+  //if ((int) stack + PGSIZE )
   np->tf->ebp = (int)stack + PGSIZE - 12; 
   np->tf->esp = (int)stack + PGSIZE - 12;
   np->tf->eip = (uint)fcn;
